@@ -1,136 +1,159 @@
-from flask import Flask, jsonify, redirect, render_template, request
-import tensorflow as tf
+from flask import Flask, request, jsonify, render_template
+from flask_cors import CORS
+import mysql.connector
 import numpy as np
-import pandas as pd
 import pickle
 import re
-import string
-from transformers import pipeline
+from tensorflow.keras.models import load_model # type: ignore
+from datetime import datetime
 import csv
-import os
-import mysql.connector
-from flask_cors import CORS
+from tensorflow.keras.preprocessing.sequence import pad_sequences # type: ignore
 
-# === FLASK ===
+
 app = Flask(__name__)
 CORS(app)
-@app.route("/")
-def home():
-    return render_template("entrenar_manual.html")
+#bloquear los insultos de la app--------------------
 
-@app.route("/guardar", methods=["GET", "POST"])
-def guardar():
-    if request.method == "POST":
-        comentario = request.form["comentario"]
-        # guardar lógica aquí
-        return "Comentario guardado"
-    else:
-        return redirect("/")
 
-# === CONEXIÓN A BASE DE DATOS ===
-conexion = mysql.connector.connect(
+# Cargar palabras ofensivas desde CSV
+def cargar_palabras_ofensivas():
+    palabras = set()
+    with open('datos/palabras_ofensivas.csv', newline='', encoding='utf-8') as csvfile:
+        for row in csv.reader(csvfile):
+            palabra = row[0].strip().lower()
+            if palabra:
+                palabras.add(palabra)
+    return palabras
+
+palabras_ofensivas = cargar_palabras_ofensivas()
+
+# -------------------- Conexión MySQL --------------------
+db = mysql.connector.connect(
     host="localhost",
     port=3306,
     user="root",
     password="",
     database="bd_comentarios"
 )
+cursor = db.cursor()
 
+# -------------------- Cargar modelo y tokenizer --------------------
+modelo = load_model('modelos/modelo.h5')
+tokenizer = pickle.load(open('modelos/tokenizer.pkl', 'rb'))
+label_encoder = pickle.load(open('modelos/label_encoder.pkl', 'rb'))
 
-with open("modelos/tokenizer.pkl", "rb") as f:
-    tokenizer = pickle.load(f)
-
-with open("modelos/label_encoder.pkl", "rb") as f:
-    label_encoder = pickle.load(f)
-
-ofensivas_df = pd.read_csv("datos/palabras_ofensivas.csv")
-palabras_ofensivas = set(ofensivas_df["palabra"].dropna().str.lower())
-
-# === STOPWORDS Y FUNCIONES ===
-stop_words = {...}  # <- Puedes pegar aquí el mismo set que ya tienes
-
+# -------------------- Función para limpiar texto --------------------
 def limpiar_texto(texto):
     texto = texto.lower()
-    texto = re.sub(r'[^ -]+', '', texto)
-    texto = texto.translate(str.maketrans('', '', string.punctuation))
-    palabras = texto.split()
-    return ' '.join([p for p in palabras if p not in stop_words and len(p) > 2])
+    texto = re.sub(r"[^a-zA-Záéíóúüñ0-9\s]", "", texto)
+    texto = re.sub(r"\s+", " ", texto).strip()
+    return texto
 
-def contiene_ofensas(texto):
-    texto = texto.lower()
-    texto = re.sub(r"[^\w\s]", "", texto)
-    palabras = texto.split()
-    return any(p in palabras_ofensivas for p in palabras)
+# -------------------- Función para predecir sentimiento --------------------
+def predecir_sentimiento(texto):
+    texto_limpio = limpiar_texto(texto)
+    secuencia = tokenizer.texts_to_sequences([texto_limpio])
+    secuencia_padded = pad_sequences(secuencia, maxlen=100)  # 👈 IMPORTANTE
+    pred = modelo.predict(secuencia_padded, verbose=0)
+    etiqueta = label_encoder.inverse_transform([np.argmax(pred)])
+    return etiqueta[0]
 
-# === API PARA COMENTARIOS DESDE FRONT ===
-@app.route('/api/comentarios', methods=['POST'])
-def recibir_comentario():
-    data = request.get_json()
-    producto_id = data.get('producto_id')
-    nombre_usuario = data.get('nombre_usuario')
-    comentario = data.get('comentario', '')
+# -------------------- Función para generar reseña general --------------------
+def generar_resena_general():
+    cursor.execute("SELECT comentario FROM comentarios")
+    comentarios = [r[0] for r in cursor.fetchall()]
+    if not comentarios:
+        return "Aún no hay suficientes comentarios para generar una reseña."
+    texto_completo = " ".join(comentarios)
+    return f"Reseña basada en {len(comentarios)} comentarios: \"{texto_completo[:300]}...\""
 
-    # Procesamiento del comentario
-    limpio = limpiar_texto(comentario)
-    secuencia = tokenizer.texts_to_sequences([limpio])
-    secuencia_pad = tf.keras.preprocessing.sequence.pad_sequences(secuencia, maxlen=100, padding='post')
-    pred = modelo.predict(secuencia_pad, verbose=0)
-    clase = label_encoder.inverse_transform([np.argmax(pred)])[0]
-    ofensivo = contiene_ofensas(comentario)
+# -------------------- Ruta principal del dashboard --------------------
+@app.route('/')
+def dashboard():
+    cursor.execute("SELECT * FROM comentarios ORDER BY id DESC")
+    comentarios = cursor.fetchall()
 
-    # Guardar en la base de datos
-    cursor = conexion.cursor()
-    cursor.execute(
-        "INSERT INTO comentarios (producto_id, nombre_usuario, comentario, sentimiento) VALUES (%s, %s, %s, %s)",
-        (producto_id, nombre_usuario, comentario, clase)
-    )
-    conexion.commit()
-    cursor.close()
+    comentarios_list = []
+    stats = {"positivo": 0, "neutro": 0, "negativo": 0}
 
-    return jsonify({
-        "mensaje": "Comentario recibido y guardado",
-        "sentimiento": clase,
-        "ofensivo": ofensivo
-    }), 201
+    for c in comentarios:
+        comentario_dict = {
+            "id": c[0],
+            "producto_id": c[1],
+            "nombre_usuario": c[2],
+            "comentario": c[3],
+            "sentimiento": c[4],
+            "fecha": c[5]
+        }
+        comentarios_list.append(comentario_dict)
+        if c[4] in stats:
+            stats[c[4]] += 1
 
-# === ENTRENAMIENTO MANUAL CON RESEÑA AUTOMÁTICA ===
-resumidor = pipeline("summarization", model="t5-small", tokenizer="t5-small")
+    resumen = generar_resena_general()
 
-@app.route("/entrenar-manual", methods=["GET", "POST"])
-def entrenar_manual():
-    mensaje = ""
-    resumen_generado = ""
-    archivo = "datos/dataset_manual.csv"
-    encabezado = ["comentario", "sentimiento"]
-    comentarios_existentes = []
+    return render_template("dashboard.html", comentarios=comentarios_list, stats=stats, resumen=resumen)
 
-    if os.path.isfile(archivo):
-        with open(archivo, encoding="utf-8") as f:
-            reader = csv.DictReader(f)
-            comentarios_existentes = [row["comentario"] for row in reader]
+# -------------------- Ruta para insertar un comentario --------------------
+@app.route('/insertar_comentario', methods=['POST'])
+def insertar_comentario():
+    data = request.json if request.is_json else request.form
 
-    if request.method == "POST":
-        comentario = request.form["comentario"]
-        sentimiento = request.form["sentimiento"]
-        if comentario and sentimiento:
-            existe = os.path.isfile(archivo)
-            with open(archivo, mode="a", encoding="utf-8", newline="") as f:
-                writer = csv.DictWriter(f, fieldnames=encabezado)
-                if not existe:
-                    writer.writeheader()
-                writer.writerow({"comentario": comentario, "sentimiento": sentimiento})
-            mensaje = "✅ Comentario guardado exitosamente"
-            comentarios_existentes.append(comentario)
+    producto_id = data.get("producto_id")
+    nombre_usuario = data.get("nombre_usuario")
+    comentario = data.get("comentario")
+    fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    if comentarios_existentes:
-        texto = " ".join(comentarios_existentes[-15:])
-        resumen = resumidor(texto, max_length=100, min_length=20, do_sample=False)
-        resumen_generado = resumen[0]['summary_text']
+    # Validación de campos
+    if not producto_id or not nombre_usuario or not comentario:
+        return jsonify({"error": "Faltan campos requeridos"}), 400
 
-    return render_template("entrenar_manual.html", mensaje=mensaje, resumen=resumen_generado)
+    # Verificar si el producto_id existe
+    cursor.execute("SELECT COUNT(*) FROM productos WHERE id = %s", (producto_id,))
+    if cursor.fetchone()[0] == 0:
+        return jsonify({"error": "El producto_id no existe en la base de datos"}), 400
+
+    # Predecir sentimiento
+    # Verificar si es ofensivo
+    if es_comentario_ofensivo(comentario):
+     return jsonify({"error": "Comentario ofensivo bloqueado"}), 400
+
+# Si no es ofensivo, predecir sentimiento
+    sentimiento = predecir_sentimiento(comentario)
+
+    # Insertar en base de datos
+    try:
+        cursor.execute(
+            "INSERT INTO comentarios (producto_id, nombre_usuario, comentario, sentimiento, fecha) VALUES (%s, %s, %s, %s, %s)",
+            (producto_id, nombre_usuario, comentario, sentimiento, fecha)
+        )
+        db.commit()
+        return jsonify({"mensaje": "Comentario insertado exitosamente", "sentimiento": sentimiento}), 200
+    except mysql.connector.Error as err:
+        db.rollback()
+        return jsonify({"error": f"Error al insertar comentario: {err}"}), 500
+
+# -------------------- Ruta para obtener todos los comentarios --------------------
+@app.route('/comentarios', methods=['GET'])
+def obtener_comentarios():
+    cursor.execute("SELECT * FROM comentarios ORDER BY id DESC")
+    comentarios = cursor.fetchall()
+    comentarios_list = []
+    for c in comentarios:
+        comentarios_list.append({
+            "id": c[0],
+            "producto_id": c[1],
+            "nombre_usuario": c[2],
+            "comentario": c[3],
+            "sentimiento": c[4],
+            "fecha": c[5]
+        })
+    return jsonify(comentarios_list)
+#----funcion para los insultos--------
+def es_comentario_ofensivo(texto):
+    palabras = limpiar_texto(texto).split()
+    return any(palabra in palabras_ofensivas for palabra in palabras)
 
 
-# === INICIO ===
+# -------------------- Ejecutar app --------------------
 if __name__ == '__main__':
     app.run(debug=True)
-

@@ -1,0 +1,225 @@
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard de Comentarios</title>
+   
+<style>
+body {
+    font-family: 'Segoe UI', sans-serif;
+    margin: 0;
+    padding: 20px;
+    background-color: #f4f7fa;
+    color: #333;
+}
+
+h1 {
+    text-align: center;
+    color: #004085;
+    margin-bottom: 30px;
+}
+
+.mensaje {
+    color: green;
+    font-weight: bold;
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.contenedor-dashboard {
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+    max-width: 1000px;
+    margin: auto;
+}
+
+.formulario, .resumen, .stats, .tabla {
+    background-color: white;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.formulario form {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.formulario input, 
+.formulario textarea {
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 1rem;
+}
+
+.formulario button {
+    padding: 12px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.formulario button:hover {
+    background-color: #0056b3;
+}
+
+.stats-box {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+.stat {
+    flex: 1;
+    padding: 12px;
+    border-radius: 8px;
+    color: white;
+    font-weight: bold;
+    text-align: center;
+}
+
+.stat.positivo {
+    background-color: #28a745;
+}
+
+.stat.neutro {
+    background-color: #ffc107;
+    color: #333;
+}
+
+.stat.negativo {
+    background-color: #dc3545;
+}
+
+.tabla-scroll {
+    overflow-x: auto;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+}
+
+table th, table td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+}
+
+table th {
+    background-color: #007bff;
+    color: white;
+}
+
+@media screen and (max-width: 768px) {
+    .stats-box {
+        flex-direction: column;
+    }
+
+    .formulario form {
+        gap: 10px;
+    }
+}
+</style>
+
+
+</head>
+
+{% if mensaje %}
+    <div class="mensaje">{{ mensaje }}</div>
+{% endif %}
+
+<div class="contenedor-dashboard">
+
+    <div class="formulario">
+        <h2>➕ Agregar Comentario</h2>
+        <form id="formulario-comentario">
+            <label>Producto ID:</label>
+            <input type="text" name="producto_id" required><br>
+        
+            <label>Nombre del usuario:</label>
+            <input type="text" name="nombre_usuario" required><br>
+        
+            <label>Comentario:</label>
+            <textarea name="comentario" required></textarea><br>
+        
+            <button type="submit">Guardar comentario</button>
+        </form>
+        <div id="mensaje"></div>
+        
+    </div>
+
+    <div class="resumen">
+        <h2>📝 Reseña General Automática</h2>
+        <p>{{ resumen }}</p>
+    </div>
+
+    <div class="stats">
+        <h2>📈 Estadísticas</h2>
+        <div class="stats-box">
+            <div class="stat positivo">👍 Positivos: {{ stats.positivo }}</div>
+            <div class="stat neutro">😐 Neutros: {{ stats.neutro }}</div>
+            <div class="stat negativo">👎 Negativos: {{ stats.negativo }}</div>
+        </div>
+    </div>
+
+    <div class="tabla">
+        <h2>📋 Lista de Comentarios</h2>
+        <div class="tabla-scroll">
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Usuario</th>
+                        <th>Comentario</th>
+                        <th>Sentimiento</th>
+                        <th>Fecha</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for c in comentarios %}
+                    <tr>
+                        <td>{{ c.id }}</td>
+                        <td>{{ c.nombre_usuario }}</td>
+                        <td>{{ c.comentario }}</td>
+                        <td>{{ c.sentimiento }}</td>
+                        <td>{{ c.fecha }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <script>
+        document.getElementById("formulario-comentario").addEventListener("submit", async function(e) {
+            e.preventDefault();
+        
+            const producto_id = this.producto_id.value;
+            const nombre_usuario = this.nombre_usuario.value;
+            const comentario = this.comentario.value;
+        
+            const respuesta = await fetch("/insertar_comentario", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ producto_id, nombre_usuario, comentario })
+            });
+        
+            const resultado = await respuesta.json();
+            const mensajeDiv = document.getElementById("mensaje");
+        
+            if (respuesta.ok) {
+                mensajeDiv.innerHTML = `<span style="color:green;">✅ ${resultado.mensaje}</span>`;
+                this.reset(); // limpiar formulario
+                setTimeout(() => location.reload(), 1000); // recargar para ver cambios
+            } else {
+                mensajeDiv.innerHTML = `<span style="color:red;">❌ ${resultado.error}</span>`;
+            }
+        });
+        </script>
+        
+</div>

@@ -1,0 +1,122 @@
+body {
+    font-family: 'Segoe UI', sans-serif;
+    margin: 0;
+    padding: 20px;
+    background-color: #f4f7fa;
+    color: #333;
+}
+
+h1 {
+    text-align: center;
+    color: #004085;
+    margin-bottom: 30px;
+}
+
+.mensaje {
+    color: green;
+    font-weight: bold;
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.contenedor-dashboard {
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+    max-width: 1000px;
+    margin: auto;
+}
+
+.formulario, .resumen, .stats, .tabla {
+    background-color: white;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.formulario form {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.formulario input, 
+.formulario textarea {
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 1rem;
+}
+
+.formulario button {
+    padding: 12px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.formulario button:hover {
+    background-color: #0056b3;
+}
+
+.stats-box {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+.stat {
+    flex: 1;
+    padding: 12px;
+    border-radius: 8px;
+    color: white;
+    font-weight: bold;
+    text-align: center;
+}
+
+.stat.positivo {
+    background-color: #28a745;
+}
+
+.stat.neutro {
+    background-color: #ffc107;
+    color: #333;
+}
+
+.stat.negativo {
+    background-color: #dc3545;
+}
+
+.tabla-scroll {
+    overflow-x: auto;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+}
+
+table th, table td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+}
+
+table th {
+    background-color: #007bff;
+    color: white;
+}
+
+@media screen and (max-width: 768px) {
+    .stats-box {
+        flex-direction: column;
+    }
+
+    .formulario form {
+        gap: 10px;
+    }
+}
