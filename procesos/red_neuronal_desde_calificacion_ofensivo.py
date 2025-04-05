@@ -45,7 +45,6 @@ def clasificar_sentimiento(row):
     else:
         return 'negativo'
     
-
 # === CARGA Y PROCESAMIENTO DE DATOS ===
 
 # Carga los datos desde un archivo CSV
@@ -56,7 +55,7 @@ df['comentario_limpio'] = df['comentario'].apply(lambda x: limpiar_texto(str(x))
 
 # Clasifica cada comentario en positivo, neutro o negativo
 df['sentimiento'] = df.apply(clasificar_sentimiento, axis=1)
-
+print(df["sentimiento"].value_counts()) 
 # === TOKENIZACIÓN DEL TEXTO ===
 
 # Separa entradas (comentario limpio) y salidas (etiquetas)
@@ -138,10 +137,10 @@ while True:
 
 # Fin del script
 # Guarda el modelo, el tokenizador y el codificador
-modelo.save("modelo.h5")
+modelo.save("modelos/modelo.keras", save_format="keras")  # guarda en la carpeta correcta
 
-with open("tokenizer.pkl", "wb") as f:
+with open("modelos/tokenizer.pkl", "wb") as f:
     pickle.dump(tokenizer, f)
 
-with open("label_encoder.pkl", "wb") as f:
+with open("modelos/label_encoder.pkl", "wb") as f:
     pickle.dump(label_encoder, f)

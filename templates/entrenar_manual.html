@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Entrenamiento Manual</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 700px;
+            margin: 30px auto;
+        }
+        textarea {
+            width: 100%;
+            height: 80px;
+            margin-bottom: 10px;
+        }
+        select, button {
+            padding: 10px;
+            margin-top: 10px;
+        }
+        .mensaje {
+            color: green;
+        }
+        .resumen {
+            background-color: #f0f0f0;
+            padding: 15px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>🔧 Entrenamiento manual</h1>
+
+    {% if mensaje %}
+        <p class="mensaje">{{ mensaje }}</p>
+    {% endif %}
+
+    <form action="/entrenar-manual" method="post">
+
+        <label for="comentario">Comentario:</label><br>
+        <textarea name="comentario" required></textarea><br>
+
+        <label for="sentimiento">Sentimiento:</label><br>
+        <select name="sentimiento" required>
+            <option value="positivo">Positivo</option>
+            <option value="neutro">Neutro</option>
+            <option value="negativo">Negativo</option>
+        </select><br>
+
+        <button type="submit">Guardar comentario</button>
+    </form>
+
+    {% if resumen %}
+        <div class="resumen">
+            <h3>📝 Reseña automática generada:</h3>
+            <p>{{ resumen }}</p>
+        </div>
+    {% endif %}
+
+</body>
+</html>
